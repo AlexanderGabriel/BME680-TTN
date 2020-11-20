@@ -4,14 +4,19 @@
 
 #define USE_DISPLAY
 #ifdef USE_DISPLAY
-#include <U8g2lib.h>
 
+#include <U8g2lib.h>
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
+
+#include <Adafruit_NeoPixel.h>
+#define LED_PIN 18
+#define LED_COUNT 8
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 //U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
@@ -20,6 +25,8 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, 
 
 int DisplayUpdateLoopInterval = 1000;
 uint32_t DisplayUpdateLoopMillis = millis() - DisplayUpdateLoopInterval;
+int NeoPixelUpdateLoopInterval = 1000;
+uint32_t NeoPixelUpdateLoopMillis = millis() - NeoPixelUpdateLoopInterval;
 
 // Create an object of the class Bsec
 Bsec iaqSensor;
@@ -62,7 +69,9 @@ void setup(void)
   output = "Timestamp [ms], raw temperature [°C], pressure [hPa], raw relative humidity [%], gas [Ohm], IAQ, IAQ accuracy, temperature [°C], relative humidity [%], Static IAQ, CO2 equivalent, breath VOC equivalent";
   Serial.println(output);
 
-
+  strip.begin();
+  strip.show();
+  strip.setBrightness(50);
 }
 
 // Function that is looped forever
@@ -89,6 +98,7 @@ void loop(void)
 #ifdef USE_DISPLAY
   updateDisplay();
 #endif
+  updateNeoPixel();
 }
 
 // Helper function definitions
@@ -162,3 +172,24 @@ void updateDisplay() {
   }
 }
 #endif
+
+void updateNeoPixel(){
+  if(millis() - NeoPixelUpdateLoopMillis > NeoPixelUpdateLoopInterval) {
+    NeoPixelUpdateLoopMillis = millis();
+    double warningValue = 800;
+    double criticalValue = 1500;
+    double steps = 2000/strip.numPixels();
+    float co2 = iaqSensor.co2Equivalent;
+    for(int i=0; i<strip.numPixels(); i++) {
+      if(co2 >= steps*(i+1)) {
+        if(co2 >= criticalValue) strip.setPixelColor(i, 255, 0, 0);
+        else if(co2 >= warningValue) strip.setPixelColor(i, 255,   165,   0);
+        else if(co2 < warningValue) strip.setPixelColor(i, 0,   255,   0);
+      }
+      else {
+        strip.setPixelColor(i, 0,   0,   0);
+      }
+        strip.show();
+    }
+  }
+}
