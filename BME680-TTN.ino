@@ -4,7 +4,6 @@
 
 #define USE_DISPLAY
 #ifdef USE_DISPLAY
-
 #include <U8g2lib.h>
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -14,14 +13,19 @@
 #endif
 
 #include <Adafruit_NeoPixel.h>
-#define LED_PIN 18
+#define LED_PIN 23
 #define LED_COUNT 8
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-//U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
 #endif
 
+#include <SimpleLMIC.h>
+SimpleLMIC ttn;
+int TTNDebugLoopInterval = 1000;
+uint32_t TTNDebugLoopMillis = millis() - TTNDebugLoopInterval;
+int TTNSendLoopInterval = 10000;
+uint32_t TTNSendLoopMillis = millis() - TTNSendLoopInterval;
 
 int DisplayUpdateLoopInterval = 1000;
 uint32_t DisplayUpdateLoopMillis = millis() - DisplayUpdateLoopInterval;
@@ -72,11 +76,17 @@ void setup(void)
   strip.begin();
   strip.show();
   strip.setBrightness(50);
+
+  ttn.begin();
+  ttn.setSubBand(2);
+  ttn.onMessage(message);
+  ttn.join(devEui, appEui, appKey);
 }
 
 // Function that is looped forever
 void loop(void)
 {
+  ttn.loop();
   unsigned long time_trigger = millis();
   if (iaqSensor.run()) { // If new data is available
     output = String(time_trigger);
@@ -99,6 +109,18 @@ void loop(void)
   updateDisplay();
 #endif
   updateNeoPixel();
+
+  if (!ttn.isBusy() && ttn.isLink() && millis() - TTNSendLoopMillis > TTNSendLoopInterval)
+  {
+    TTNSendLoopMillis = millis();
+    Serial.println("Not Busy!");
+    Serial.println(iaqSensor.co2Equivalent);
+    Serial.println(sizeof(iaqSensor.co2Equivalent));
+    uint8_t buffer[sizeof(iaqSensor.co2Equivalent)];
+    ::memcpy(buffer, &iaqSensor.co2Equivalent, sizeof(iaqSensor.co2Equivalent));
+    ttn.write(buffer, sizeof(buffer));
+    ttn.send();
+  }
 }
 
 // Helper function definitions
@@ -168,6 +190,12 @@ void updateDisplay() {
     sprintf(displayText, "%20s", co2String);
     u8g2.drawStr(0,40,displayText);
 
+    sprintf(displayText, "ttn.isBusy(): %d", ttn.isBusy());
+    u8g2.drawStr(0,50,displayText);
+
+    sprintf(displayText, "ttn.isLink(): %d", ttn.isLink());
+    u8g2.drawStr(0,60,displayText);
+
     u8g2.sendBuffer();
   }
 }
@@ -191,5 +219,23 @@ void updateNeoPixel(){
       }
         strip.show();
     }
+  }
+}
+
+void printTTNDebug() {
+  Serial.print("ttn.isBusy(): ");
+  Serial.print(ttn.isBusy());
+  Serial.print(" ttn.isLink(): ");
+  Serial.print(ttn.isLink());
+
+  Serial.println();
+}
+
+void message(uint8_t *payload, size_t size, uint8_t port)
+{
+  Serial.println("Received " + String(size) + " bytes on port " + String(port));
+  switch (port) {
+    case 1:
+      break;
   }
 }
