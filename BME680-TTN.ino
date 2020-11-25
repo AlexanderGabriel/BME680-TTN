@@ -14,17 +14,20 @@
 
 #include <Adafruit_NeoPixel.h>
 #define LED_PIN 23
-#define LED_COUNT 8
+#define LED_COUNT 1
+#define LEDALWAYSON
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ 15, /* data=*/ 4, /* reset=*/ 16);
 #endif
 
 #include <SimpleLMIC.h>
+#include "TTN-configuration.h"
 SimpleLMIC ttn;
 int TTNDebugLoopInterval = 1000;
 uint32_t TTNDebugLoopMillis = millis() - TTNDebugLoopInterval;
-int TTNSendLoopInterval = 10000;
+
+int TTNSendLoopInterval = 60*1000;
 uint32_t TTNSendLoopMillis = millis() - TTNSendLoopInterval;
 
 int DisplayUpdateLoopInterval = 1000;
@@ -209,15 +212,19 @@ void updateNeoPixel(){
     double steps = 2000/strip.numPixels();
     float co2 = iaqSensor.co2Equivalent;
     for(int i=0; i<strip.numPixels(); i++) {
+      #ifndef LEDALWAYSON
       if(co2 >= steps*(i+1)) {
+      #endif
         if(co2 >= criticalValue) strip.setPixelColor(i, 255, 0, 0);
         else if(co2 >= warningValue) strip.setPixelColor(i, 255,   165,   0);
         else if(co2 < warningValue) strip.setPixelColor(i, 0,   255,   0);
+      #ifndef LEDALWAYSON
       }
       else {
         strip.setPixelColor(i, 0,   0,   0);
       }
-        strip.show();
+      #endif
+      strip.show();
     }
   }
 }
